@@ -1,0 +1,1320 @@
+EDA Project by Henrik Steffen
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk. This
+# prevents the code from displaying in the knitted HTML output. You should set
+# echo=FALSE for all code chunks in your file, unless it makes sense for your
+# report to show the code that generated a particular plot.
+
+# The other parameters for "message" and "warning" should also be set to FALSE
+# for other code chunks once you have verified that each plot comes out as you
+# want it to. This will clean up the flow of your report.
+
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(GGally)
+library(psych)
+library(readr)
+library(data.table)
+library(memisc)
+library(ggthemes)
+
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+setwd('D:/Storage/Download/Lern Ressourcen/Data Analyst Nanodegree/Exploratory Data Analysis/Project_EDA')
+
+loans <- read.csv('prosperLoanData.csv')
+
+```
+
+# General Information
+
+This data set contains 113,937 loans with 81 variables on each loan, including 
+loan amount, borrower rate (or interest rate), current loan status, 
+borrower income, borrower employment status, borrower credit history, 
+and the latest payment information.
+
+As far as I understood, customers of the Prosper loan platform either take out 
+a loan or invest their money, which other customers then loan while they yield
+a interest for the money they invested. This dataset only contains data of
+loans, so everyone of these customers borrows or borrowed money.
+
+# Univariate Plots Section
+
+## Structure of the dataset
+```{r echo=FALSE, Univariate_Plots}
+
+str(loans)
+
+```
+
+## Histogram of loan status
+```{r echo=FALSE}
+
+summary(loans$LoanStatus)
+
+# histogram of loan status
+
+qplot(x = LoanStatus, data = loans) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# subset chargedoff or defaulted
+
+defsub <- subset(loans, 
+          loans$LoanStatus == "Chargedoff" | loans$LoanStatus == "Defaulted")
+#str(defsub)
+
+```
+
+Plotting a histogram of the loan statuses in the dataset shows, that the 
+majority of loans are either "current" or "completed". A significant portion of
+loans are also either "Chargedoff" or "defaulted". As far as I understood 
+(I`m not a native English speaker and don´t know much about US loan terminology) 
+both are statuses where the customer is unable to pay his monthly payments. 
+Together these two statuses comprise around 17.000 customers, or ca. 15% of all
+customers. Additionally there is a minority of customers that are due on their
+payments for more than 120 days (after 180 days of non payment the account gets
+charged-off?). So that there is a significant portion of customers not able to
+pay back their loans.
+
+
+## Term 
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# histogram of Term lenght
+
+summary(loans$Term)
+
+qplot(x = Term, data = loans)
+
+```
+
+Looking at the distribution of the loan terms reveals, that there are only
+three term options: 12, 36 or 60 months. 36 months is by far the most popular
+option, while 12 months is the least popular one
+
+
+## Credit grades
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# histogram of Credit grades
+summary(loans$CreditGrade)
+qplot(x = CreditGrade, data = loans) 
+
+```
+
+From the summary and the frequency for each of the credit grades one can 
+immediately see that the largest portion of loans (ca. 85.000) have a credit 
+grade of "". So these loans seem not to be graded and only around 30.000 of the 
+loans have been graded. To better look at the graded loans I created a subset
+of loans that do not have a grade of "". 
+
+## Cleaned credit grades
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# credit grade is a factor with 9 levels, one of them is "" -> exclude
+grades_clean <- subset(loans, loans$CreditGrade != "")
+
+qplot(x = CreditGrade, data = grades_clean) 
+```
+
+Looking at the graded loans only, one can see that the number of loans per grade
+are quite equally distributed, except for loans graded "NC". There are only
+ca. 140 loans with this grade. For the other grades there are roughly between 
+3300 and 5700 loans per grade. The most frequent grade is "c". Another thing
+I noticed is that the order of grades is propably not correct. I would think
+that the best grade would be "AA", so I reordered the grades so that "AA" is
+the first in the plot. This means I assume the order of grades from best to 
+worst is "AA", "A", "B", "C", "D" to "E". I actually don´t know what a grade of
+"HR" or "NC" means.
+
+## Reordered grades 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+grades_clean$CreditGrade_ordered <- factor(grades_clean$CreditGrade, 
+                                    levels =
+                                    c("AA", "A", "B","C","D","E","HR","NC",""))
+
+qplot(x = CreditGrade_ordered, data = grades_clean) 
+```
+
+Then I was interested in all those loans that are not graded (or graded ""), so
+I investigated further. I created a subset containing only loans ungraded loans 
+and looked at LoanStatus of this subset.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+GradeSub <- subset(loans, loans$CreditGrade == "")
+
+summary(GradeSub$LoanStatus) # mix of all statuses
+
+```
+
+So ungraded loans have a mix of almost all the different loan statuses, but the
+majority (ca. 56.000 out of 85.000) are "current" loans. While there is also a
+significant number of loans with the status "completed", most of the ungraded
+loans are "current" or in one form or another past due. 
+
+The grading for these loans without a credit grade can be found in at least two
+other variables: ProsperRating..Alpha. and ProsperRating..numeric.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+summary(GradeSub$ProsperRating..Alpha.) 
+summary(GradeSub$ProsperRating..numeric.)
+```
+
+Although there are a few loans that also do not have a ProsperRating (131), 
+Credit grade and the ProsperRating seem to be mutually exclusive. From a subset
+of only loans that do not have a credit grade of "", none of the loans has a
+ProsperRating: 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+GradeSub2 <- subset(loans, loans$CreditGrade != "")
+
+summary(GradeSub2$ProsperRating..numeric.) 
+# no ProsperScore or rating if there is a CreditGrade
+summary(GradeSub2$ProsperRating..Alpha.)
+```
+
+I then looked at the variable definition for this dataset, which explains this
+mutual exclusivity: The credit grade was only applied for loans originating 
+pre-2009, while the ProsperRating was introduced for loans issued after July
+2009.
+
+I then ordered the ProsperRating..Alpha. in the same way as I did for the 
+credit grades and plotted histograms for credit grades and prosper rating
+beneath each other:
+
+## Distribution of credit grades and Prosper rating
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ProsperRatingSub <- subset(GradeSub, GradeSub$ProsperRating..Alpha. != "")
+
+summary(ProsperRatingSub$ProsperRating..Alpha.)
+
+ProsperRatingSub$ProsperRating..Alpha._ordered <- 
+  factor(ProsperRatingSub$ProsperRating..Alpha., 
+   levels = c("AA", "A", "B","C","D","E","HR","NC",""))
+
+p_grade <- qplot(x = CreditGrade_ordered, data = grades_clean) 
+
+p_ratingAlpha <- qplot(x = ProsperRating..Alpha._ordered, 
+                       data = ProsperRatingSub) 
+
+grid.arrange(p_grade, p_ratingAlpha, ncol = 1)
+
+```
+
+Both before and after July 2009 most of the loans are rated "C". Interestingly
+the proportion of loans rated "AA" is significantly lower for loans originating
+after July 2009. Thus the distribution of grades after July 2009 looks closer
+to a normal distribution then the distribution of credit grades pre-2009, which
+is more uniform.
+
+## Income
+
+Next I was interested in the Income of the customers taking out a loan. There
+are two variables regarding the income I looked at. One is the income range:
+
+### IncomeRange
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+summary(loans$IncomeRange)
+
+qplot(x = IncomeRange, data = loans) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The income range is a factor with 8 levels, with one level spanning 25,000$ in
+general. There are exceptions: There is a level for an income of 0, as well
+as for customers that are not employed or where the income range is not 
+displayed.
+
+From the histogram one can see that most loans are taken out by customers with
+an income in the range of 25,000 to 75,000$. The income ranges are not fully in
+order so I created a new variable for the ordered ranges:
+
+## Income range reordered
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+loans$IncomeRange_ordered <- factor(loans$IncomeRange, 
+                                    levels =
+                                    c("$0", "$1-24,999", "$25,000-49,999",
+                                      "$50,000-74,999","$75,000-99,999",
+                                      "$100,000+","Not displayed",
+                                      "Not employed"))
+
+qplot(x = IncomeRange_ordered, data = loans) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+It was a bit surprising for me to see that such a big number of customers
+(>30,000) with an income >75,000$ are taking out loans. It would be interesting
+the see the distribution of income ranges of the general (US?) population in
+comparison. I would assume that high income ranges (>75,000$) are 
+overrepresented in this dataset.
+
+The other factor I looked at regarding income is StatedMonthlyIncome:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# histogram of StatedMonthlyIncome
+
+summary(loans$StatedMonthlyIncome)
+
+IncomeSorted <- sort(loans$StatedMonthlyIncome, decreasing = TRUE)
+
+
+
+p_a <- qplot(x = StatedMonthlyIncome, data = loans, binwidth = 500)
+
+p_b <- ggplot(aes(x = StatedMonthlyIncome), data = loans) + 
+  geom_histogram(breaks = seq(0,40000,500)) +
+  scale_x_continuous(limits = c(0,quantile(loans$StatedMonthlyIncome, 0.99)))
+
+IncomeDistPlot <- grid.arrange(p_a,p_b, ncol = 1)
+
+```
+
+The distribution of the stated monthly income is extremely longtailed. While 
+the third quartile is at 6825\$, the maximum lies at 1750003\$. Plotting the
+stated monthly income without further adjustments reveals the huge range in
+monthly incomes. Looking at the distribution of the 99% quantile, one can see
+that 99% of customers have a stated monthly income of 20.000\$ or less.
+The vast majority of customers have a stated monthly income of less than
+10.000\$. The mode of this distribution is at an income of around 5000\$, while
+the median is at 4667\$.
+
+I then checked what the number of verifiable incomes is:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+summary(loans$IncomeVerifiable)
+```
+
+Interestingly most of the stated incomes are verified (>100,000), which 
+indicates that the huge range in stated incomes are actually present in
+reality and not outliers due to self reporting.
+
+## ListingCategory
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# histogram of listing category 
+summary(loans$ListingCategory..numeric.)
+
+qplot(x = ListingCategory..numeric., data = loans, binwidth = 1)
+
+listingPlot <- ggplot(aes(x = ListingCategory..numeric.), data = loans) +
+  geom_histogram(stat = "count") +
+  scale_x_discrete(limits = seq(0,20,1), breaks = seq(0,20,1)) 
+  
+
+listingPlot
+  
+```
+
+Legend for the Listing categories:
+
+0 - Not Available
+1 - Debt Consolidation
+2 - Home Improvement
+3 - Business
+4 - Personal Loan
+5 - Student Use
+6 - Auto
+7 - Other
+8 - Baby&Adoption
+9 - Boat
+10 - Cosmetic Procedure
+11 - Engagement Ring
+12 - Green Loans
+13 - Household Expenses
+14 - Large Purchases
+15 - Medical/Dental
+16 - Motorcycle
+17 - RV
+18 - Taxes
+19 - Vacation
+20 - Wedding Loans
+
+The variable ListingCategory..numeric. is a very interesting one, since it 
+contains the purpose a loan was taken out for. Each of the 20 different 
+purposes is assigned to a numerical value as listed above.
+
+The most frequent category customers listed was "debt consolidation". Around
+half of all the loans in this dataset were taken out for this reason. The next
+most frequent categories are "Not Available" and "Other", which unfortunately
+do not tell us anything about what the loan was used for. Other frequent 
+categories that tell us something about the purpose of the loan are "Business" 
+and "Home Improvement".
+
+It is quite striking to me seeing that most of the customers are taking out 
+these loans in order to consolidate debt. So they are getting into additional 
+debt in order to pay off some other debt. Possible explanations for this
+phenomenon would be that these loans are quite easy to obtain, i.e. that 
+customers do not have to go through a very rigorous scrutiny of their financial
+standing. Or it could indicate that these loans are offered at very attractive
+conditions so making it worthwhile to take out one of these loans to pay off 
+another one.
+
+This motivated me to look into this listing category in more detail.
+
+## Subset for debt consolidation category
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Subset with listingcategory 1
+
+consol_sub <- subset(loans, loans$ListingCategory..numeric. == 1)
+
+summary(consol_sub$IncomeRange_ordered)
+
+IncomeConsol <- qplot(x = IncomeRange_ordered, data = consol_sub) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+IncomeOverall <- qplot(x = IncomeRange_ordered, data = loans) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+IncomeConsol
+
+IncomeOverall
+
+#grid.arrange(IncomeOverall, IncomeConsol, ncol = 1)
+
+```
+
+Comparing the frequencies of the income ranges between the overall dataset (top)
+and the subset of loans in the category "Debt Consolidation" shows a lot of 
+similarity. In both cases most customers have an income between 25.000 and
+75.000\$. Interestingly, low incomes seem to be slightly underrepresented 
+compared to the overall dataset, while the high income ranges (>75.000\$) seem
+to be at least as frequent as in the overall dataset. This indicates that the 
+assumption that taking out such a loan involves only kind of lax scrutiny is 
+rather unlikely. The fact that even high income customers frequently take out 
+loans for the purpose of debt consolidation might hint at quite attractive 
+conditions for these loans.
+
+
+## Number of loans per customer
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# 
+summary(loans$TotalCreditLinespast7years) # overall
+
+summary(consol_sub$TotalCreditLinespast7years) # debt consolidation subset
+
+```
+
+Looking at the number of credit lines a customer had in the past 7 years, shows
+that customers, who took out a loan for "Debt Consolidation" had had in median
+2 more credit lines when compared to the overall dataset. The average is also 
+around 2 bigger in the "Debt Consolidation" subset. Since loans in the category
+debt consolidation make up around half of all the loans in this dataset, the 
+numbers for the overall dataset are heavily influenced by/skewed towards the 
+"Debt Consolidation" category. The higher number of credit lines in the past 7
+years might indicate that debt consolidation is a continuous process for many
+customers that requires taking out loans one after another (this is pretty
+speculative). 
+
+## Borrower Rate
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+summary(loans$BorrowerRate)
+
+qplot(x = BorrowerRate, data = loans, binwidth = 0.01)
+
+summary(loans$LenderYield)
+
+qplot(x = LenderYield, data = loans, binwidth = 0.01)
+
+```
+
+Next I looked at the interest rates for the loans (BorrowerRate) and the 
+LenderYield respectively. According to the variable definitions for this 
+dataset, the LenderYield is equal to the BorrowerRate minus service fees.
+The summaries and plots for BorrowerRate (top) and LenderYield (bottom) confirm
+this. The median, mean and histograms are very similar. The most frequent
+rates are at 0.14, 0.15 and 0.18. There is also a peak at the higher end of the 
+spectrum at ca. 0.32. Interestingly there are a few loans at an interest rate 
+of 0. 
+
+## Loaned amount
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Histogram of the LoanOriginalAmount (total amount of the loan taken up)
+
+summary(loans$LoanOriginalAmount)
+
+qplot(x = LoanOriginalAmount, data = loans, binwidth = 1000)
+
+ggplot(aes(x = LoanOriginalAmount), data = loans) + 
+  geom_histogram(breaks = seq(0,35000,100)) +
+  scale_x_continuous(breaks = seq(0,35000,2000)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+
+```
+
+Looking at the amount of money customers originally borrowed, we can see that 
+the minumum loan that can be taken up is 1000\$. The maximum amounts that were
+borrowed were 35.000\$. The median is at 6500\$, while the average is at 8337\$.
+
+The distribution of loan amount is positively skewed, with the majority of
+customers borrowing less than 10.000\$. Setting the bin size to 100, one can
+see very distinct peaks for certain amounts. Usually there is a peak every
+1000\$. Amounts deviating from a multiple of 1000 seem to be unpopular. The 
+biggest peak can be observed for an amount of 4000\$. There are similarly high
+peaks at 10.000 and 15.000\$.
+
+Coloring the histogram by term length shows, that for lower amounts loaned 
+(< 10.000\$) a term length of 36 months makes up the majority of loans. As the
+loaned amount increases, the proportion of loans running for 60 months also 
+increases. For the amount of 15.000\$ (and higher) the ratio between term length 
+of 36 and 60 month is around 1:1. Loans running for 12 months make up only a 
+tiny fraction of the overall number of loans.
+
+
+## Monthly Loan payment
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# MOnthlyLoanPayment 
+
+summary(loans$MonthlyLoanPayment)
+
+# Histogram
+
+# Full range
+p1aa <- ggplot(aes(x = MonthlyLoanPayment), data = loans) + 
+  geom_histogram(breaks = seq(0,2300,10), position = "stack") +
+  scale_x_continuous(breaks = seq(0,2500,100)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# 99% quantile
+p2aa <- ggplot(aes(x = MonthlyLoanPayment), data = loans) + 
+  geom_histogram(breaks = seq(0,2300,10), position = "stack") +
+  scale_x_continuous(breaks = seq(0,2500,100), 
+                     limits = c(0,quantile(loans$MonthlyLoanPayment, 0.99)))
+
+grid.arrange(p1aa,p2aa, ncol = 1)
+```
+
+Looking at the monthly loan payment, we find that the median payment is 217.7\$,
+the mean 272.5\$ and the maximum is 2251.5\$. Considering the 3rd quartile with
+371.6\$, one can assume that the maximum is an extreme outlier. Plotting 
+histograms of the monthly loan payments, both of the full range of amounts and
+of the 99% quantile, shows that 99% of monthly loan payments are below 900\$. 
+So the maximum is indeed an outlier. 
+
+The mode of the distribution is slightly below 200\$, with a steep decrease in
+frequency for larger amounts. 
+
+Another interesting point is the minimum payment of 0\$ by ca. 1000 customers.
+One possible explanation might be customers temporarily deferring their payments
+or that are unable to pay back the loan. 
+
+## Number of Investor
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Investors
+
+summary(loans$Investors)
+
+qplot(x = Investors, data = loans, binwidth = 10)
+
+
+```
+
+The distribution of the number of investors funding each of the loans is 
+positively skewed and very long-tailed. The range is quite huge, with a minimum
+of 1 and a maximum of 1189 investors funding a loan. The most frequent number of
+investors for a loan is between 1 and 10, which is the case for ca. 25% of the 
+loans in the dataset. The number of loans funded by higher numbers of investors
+decreases as the number of investors funding a loan increases.
+
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+There are 113937 loans in this dataset with 81 variables per observation. These
+are to many variables to consider in the scope of this project.
+
+LoanStatus is an unordered factor variable with 12 levels. 
+
+Term is an ordered factor variable with 3 levels: 12, 36  or 60 months.
+
+CreditGrade (and ProsperRating..Alpha.) is an ordered factor with 9 levels: 
+from AA (best) to E (worst?) (this is the order I assumed. It is not explicitly
+stated in the variable definitions and I don´t know where the levels "HR" and
+"NC" rank in this rating)
+
+IncomeRange is also an ordered factor variable with 8 levels:
+$0, $1-24.999, $25.000-49.999, $50.000-74.999, $74.999-99.999, $100.000+,
+"Not displayed" and "Not employed".
+
+StatedMonthlyIncome is a numerical variable with a minimum of 0, a maximum of
+1.750.003 and a median of 4667.
+
+ListingCategory..numeric. is an integer variable with each integer being
+assigned to one of the listing categories:
+
+0 - Not Available
+1 - Debt Consolidation
+2 - Home Improvement
+3 - Business
+4 - Personal Loan
+5 - Student Use
+6 - Auto
+7 - Other
+8 - Baby&Adoption
+9 - Boat
+10 - Cosmetic Procedure
+11 - Engagement Ring
+12 - Green Loans
+13 - Household Expenses
+14 - Large Purchases
+15 - Medical/Dental
+16 - Motorcycle
+17 - RV
+18 - Taxes
+19 - Vacation
+20 - Wedding Loans
+
+Around half of all the loans in this dataset are listed as category 1, i.e debt
+consolidation.
+
+TotalCreditLinespast7years is also an integer variable with a minimum of 2, a 
+maximum of 136 and a median of 25.
+
+BorrowerRate and LenderYield are both numerical variables. BorrowerRate has a 
+minimum of 0, a maximum of 0.4975 and a median of 0.184. The minimum of 
+LenderYield is -0.01, while the maximum is 0.4925 and the median 0.173.
+
+LoanOriginalAmount is a integer variable with a minimum of 1000, a maximum of
+35.000 and a median of 6500.
+
+MonthlyLoanPayment is a numerical variable with a minimum of 0, a maximum of
+2251.5 and a median of 217.7.
+
+### What is/are the main feature(s) of interest in your dataset?
+
+The main features I´m interested in are the LoanOriginalAmount, 
+MonthlyLoanPayment, BorrowerRate which I´d like to explore in their relationship
+to time, term and CreditGrade/Rating.
+
+### What other features in the dataset do you think will help support your \
+investigation into your feature(s) of interest?
+
+As mentioned above, the date, term and rating of the loan as well as the 
+LoanStatus and IncomeRange/StatedMonthlyIncome of the customer.
+
+### Did you create any new variables from existing variables in the dataset?
+
+I created a new variable for the ratio between the MonthlyLoanPayment and the
+StatedMonthlyIncome. I also created a new variable for the reordered 
+CreditGrade. Furthermore I converted the ListingCreationDate into a date in the
+format %Y-%m-%d and stored this as a factor in a new LoanDate variable.
+
+### Of the features you investigated, were there any unusual distributions? \
+Did you perform any operations on the data to tidy, adjust, or change the form \
+of the data? If so, why did you do this?
+
+I reordered the CreditGrade/ProsperRating..Alpha. variable from AA to E and also
+created a subset removing all loans with a CreditGrade of "". I also reordered
+the IncomeRange variable so that the ranges are in ascending order. 
+
+StatedMonthlyIncome shows an usual distribution. It is positively skewed but
+extremely longtailed. The maximum is at 1.750.003$ while the 99% quantile is 
+around 20.000$. 
+
+As mentioned above I converted the ListingCreationDate into a factor in 
+%Y-%m-%d format in order to remove the excact time of day a listing was created.
+I did this so that calculating and plotting e.g. a mean for each day was easier.
+
+
+# Bivariate Plots Section
+
+## Number of Investor
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Investors vs LoanOriginalAmount
+
+
+pInvAmou <- ggplot(aes(x = LoanOriginalAmount, y = Investors), data = loans) +
+  geom_point(alpha = 1/20, position = position_jitter(h=0)) + 
+  geom_smooth()
+
+pInvAmou
+
+
+
+```
+
+Next I looked at the relationship between the LoanOriginalAmount and the number
+of investors funding a loan. Overall there is a slight trend of increasing 
+numbers of investors as the amount of the loans increase. At the same time we 
+can see that the variance in the number of investors strongly increases as the
+loaned amount increases. So it seems that while there is a relationship 
+between the amount of a loan and the number of investors funding it, there are 
+probably other variables affecting the number of investors. One thing that is 
+not clear from this dataset is the amount every investor is funding a loan with.
+So possibly a higher number of investors is necessary if each investor is only
+funding a loan with a moderate sum. If there is any kind of limitation on how
+much money an investor can put into a single loan, this alone would explain
+the general increase of investors as the loan amount increases.
+
+I would assume that the number of investors could also be seen as an indicator
+of risk. This would mean that probably fewer investors were willing to fund 
+risky loans, while safer loans would find more investors. So I looked for 
+relationships between the number of investors and other variables that could 
+be indicative of the risk associated with a loan.
+
+```{r}
+# Investors vs CreditGrade
+pInvGrade <- ggplot(aes(x = CreditGrade_ordered, y = Investors),
+       data = grades_clean) + 
+  geom_boxplot() +
+  stat_summary(fun.y = mean, geom = 'point', shape = 4 )
+
+# Investors vs ProsperRating
+
+# subset removing ProsperRating of ""
+
+RatingSub <- subset(loans, loans$ProsperRating..Alpha. != "")
+
+RatingSub$ProsperRating..Alpha._ordered <- 
+  factor(ProsperRatingSub$ProsperRating..Alpha., 
+    levels = c("AA", "A", "B","C","D","E","HR","NC",""))
+
+pInvRating <- ggplot(aes(x = ProsperRating..Alpha._ordered, y = Investors),
+       data = RatingSub) + 
+  geom_boxplot() +
+  stat_summary(fun.y = mean, geom = 'point', shape = 4 )
+
+grid.arrange(pInvGrade, pInvRating, ncol = 1)
+
+```
+
+So next I plotted the number of investors vs the CreditGrade and ProsperRating
+respectively. The rating of a loan is also indicative of the risk associated 
+with the loan. Loans with the best rating (AA) are less risky for the funder 
+than loans rated E. From the plots one can see that there is a clear trend of
+decreasing numbers (mean, median) of investors from loans with the best to the 
+worst rating. So one can assume that the riskier a loan, the less investors 
+funding it. Interestingly after introdution of the new ProsperRating system
+in July 2009, the difference in investor numbers between AA and all the other
+ratings is more pronounced. From the histograms of CreditGrade and ProsperRating
+we can see that after July 2009 loans with AA rating are proportionally much 
+rarer than in the CreditGrade sytem pre-2009. One could speculate that after
+the financial crisis 2008, getting an AA rating became more difficult and 
+investors were more interested in security and thus preferred funding AA rated
+loans.
+
+There is still a lot of variance in investors numbers per credit rating, so I
+looked at another factor that might have an influence on the number of investors
+per loan. This is the number of investors plotted against the LenderYield 
+(which is the interest rate a customer pays minus service fees):
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+# Investors vs LenderYield
+
+pInvLend <- ggplot(aes(x = LenderYield, y = Investors), data = loans) +
+  geom_point(alpha = 1/20, position = position_jitter(h=0)) + 
+  geom_smooth()
+
+pInvLend
+
+
+```
+
+One can see that investor funding a loan peak at loans with a LenderYield of
+around 0.1. These loans probably represent low risk but also low yield loans. 
+The number of investors then decreases as the LenderYield increases, although 
+there is a slight uptick in investor number for loans with a yield > 0.3. So
+in general one could assume that the higher the risk, the fewer investors 
+fund a loan. But if the yield for the investor is high (attractive) enough, it 
+might be an incentive to take the risk and fund such a loan.
+
+## LenderYield/BorrowerRate vs CreditGrade
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Plotting CreditGrade vs LenderYield
+
+by(grades_clean$LenderYield, grades_clean$CreditGrade_ordered, summary)
+
+pGradeYield <- ggplot(aes(x = CreditGrade_ordered, y = LenderYield),
+       data = grades_clean) + 
+  geom_boxplot() +
+  stat_summary(fun.y = mean, geom = 'point', shape = 4 )
+
+
+# Plotting ProsperRating vs LenderYield
+pRatingYield <- ggplot(aes(x = ProsperRating..Alpha._ordered, y = LenderYield),
+       data = RatingSub) + 
+  geom_boxplot() +
+  stat_summary(fun.y = mean, geom = 'point', shape = 4 )
+
+grid.arrange(pGradeYield, pRatingYield, ncol = 1)
+
+by(RatingSub$LenderYield, RatingSub$ProsperRating..Alpha._ordered, summary)
+
+```
+
+In order to visualize the incentive of higher risk loans for investors, I 
+plotted the LenderYield against the respective CreditGrade or ProsperRating.
+The plots clearly show that the median (and mean) LenderYield increases from
+the best (AA) to the worst rating (E). One can also see from the plots, that 
+after introducing the ProsperRating system in 2009, the differences in yield 
+between the rating got more pronounced. The median yield for AA rated loans is 
+lower than for loans pre-2009 (CreditGrade), while the median yield for E rated
+loans is higher. For the CreditGrade system the median LenderYield ranges from
+0.083 (AA) to 0.244 (E). For the ProsperRating system the median LenderYield 
+ranges from 0.068 (AA) to 0.282 (E).
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+pStatGrade <- ggplot(aes(x = CreditGrade_ordered, fill=LoanStatus),
+       data = grades_clean) + 
+  geom_bar(stat = "count") +
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal()
+
+pStatRating <- ggplot(aes(x = ProsperRating..Alpha._ordered, fill=LoanStatus),
+       data = RatingSub) + 
+  geom_bar(stat = "count") +
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal()
+
+pStatGrade
+
+pStatRating
+
+#grid.arrange(pStatGrade, pStatRating, ncol = 1)
+
+```
+
+In order to illustrate why worse credit grades/ratings are indicative for higher
+risk loans, I plotted the grades/ratings and colored them by the LoanStatus. 
+The first thing that struck me are the much more granular LoanStatus levels that
+were apparently introduced alongside the ProsperRating system in 2009. When the
+CreditGrade system had only 4 levels, the ProsperRating system had 11. 
+
+Overall one can see that for both rating systems the number of loans that are in
+some form overdue increases from the best rating (AA) to the worst (E). So it is
+more common for loans rated "E" to be past due, defaulted, chargedoff or 
+cancelled. This is probably constitutes a significant portion of the risk 
+associated with a given loan.
+
+## Income range per loan rating
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(aes(x = ProsperRating..Alpha._ordered, fill = IncomeRange_ordered),
+       data = RatingSub) + 
+  geom_bar(stat = "count") +
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal()
+```
+
+Another factor that I looked at regarding the different ratings is the income
+range. The portion of high income customers (>75.000\$) among loans rated "AA" 
+is much higher than among loans rated "E". Accordingly the portion of lower 
+income customers (<50.000\$) increases from the best rating to the worst rating.
+So there probably is a relationship between the income of the customer and the
+rating of a given loan. One could assume that the income is a factor determining
+the loan rating.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# scatter plot BorrowerRate vs ListingCreationDate
+
+# ListingCreationDate is a factor with 100k levels -> convert to date first
+# new variable "loan_date" containing date in %Y-%m-%d format
+
+loan_date <- as.Date(loans$ListingCreationDate)
+
+
+
+
+test_date <- factor("2007-08-26 19:09:29.263000000")
+
+test_date_clean <- as.Date(test_date)
+
+
+
+loans_with_date <- loans
+loans_with_date$LoanDate <- loan_date
+
+
+
+# no loans issued in 2009?????
+
+# group by LoanDate first and calculate mean per date? -> use aggregate
+group_mean <- aggregate(loans_with_date["BorrowerRate"], by = loans_with_date["LoanDate"], mean)
+
+
+
+# convert LoanDate into factor
+
+loans_date_factor <- loans_with_date  
+
+loans_date_factor$LoanDate <- factor(loans_date_factor$LoanDate)
+
+```
+
+
+
+## Ratio of monthly payment/income vs StatedMonthlyIncome
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+loans_pay_income_ratio <- subset(loans, loans$StatedMonthlyIncome != 0) 
+loans_pay_income_ratio$PayIncomeRatio <- 
+  loans_pay_income_ratio$MonthlyLoanPayment / 
+  loans_pay_income_ratio$StatedMonthlyIncome
+
+
+summary(loans_pay_income_ratio$PayIncomeRatio)
+
+ggplot(aes(x = StatedMonthlyIncome, y = PayIncomeRatio),
+       data = loans_pay_income_ratio) + 
+  geom_point(alpha = 1/10, position = position_jitter(h=0)) +
+  scale_x_continuous(limits = 
+          c(0,quantile(loans_pay_income_ratio$StatedMonthlyIncome, 0.99))) + 
+  scale_y_continuous(limits = 
+          c(0,quantile(loans_pay_income_ratio$PayIncomeRatio, 0.99))) +
+  geom_smooth(formula = y ~ median(y))
+
+
+```
+
+Next I wanted to visualize the proportion of their stated income customers have 
+to pay in their monthyl loan payments. For this reason I created a new variable
+("PayIncomeRatio") by calculating: MonthlyLoanPayment / StatedMonthlyIncome 
+(after removing incomes of 0). Looking at the summary for this ratio one can
+see that there is an extreme range for this variable: from 0 to 12571.73. These
+extreme values are on the one hand due to monthly loan payments of 0, resulting
+in a ratio of 0, and on the other hand due to very low incomes (the lowest that
+is not 0 is 0.083) with a monthly payment of around 1000$. Therefore I decided
+to only plot the 99% quantile for both the ratio and the income. 
+
+Unsurprisingly one can see from the plot, that as the income increases the 
+ratio of monthly payment/income decreases. Furthermore the variance in the ratio
+also decreases. So customers with a higher income need to spend a smaller 
+proportion of their monthly income for paying off the loans the took out.
+
+## MonthlyLoanPayment vs LoanOriginalAmount
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+ggplot(aes(x = LoanOriginalAmount, y = MonthlyLoanPayment), 
+       data = loans_date_factor) +
+  geom_point(alpha = 1/20, position = position_jitter(h=0))
+
+
+```
+
+Plotting the LoanOriginalAmount against the MonthlyLoanPayment reveals 
+(unsurprisingly) a positive linear relation between the amount of money loaned
+and the monthly payment. Interestingly one can see 3 distinct groups, which 
+could be represented as 3 distinct trend lines with different slopes. 
+So there seem to be 3 distinct groups where the customers pay different amounts
+per month for the same total amount loaned. 
+
+
+## BorrowerRate over time
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# scatter plot BorrowerRate vs ListingCreationDate
+
+# ListingCreationDate is a factor with 100k levels -> convert to date first
+# new variable "loan_date" containing date in %Y-%m-%d format
+
+loan_date <- as.Date(loans$ListingCreationDate)
+
+
+
+
+test_date <- factor("2007-08-26 19:09:29.263000000")
+
+test_date_clean <- as.Date(test_date)
+
+
+
+loans_with_date <- loans
+loans_with_date$LoanDate <- loan_date
+
+
+
+# no loans issued in 2009?????
+
+# group by LoanDate first and calculate mean per date? -> use aggregate
+group_mean <- aggregate(loans_with_date["BorrowerRate"], 
+                        by = loans_with_date["LoanDate"], mean)
+
+
+
+# convert LoanDate into factor
+
+loans_date_factor <- loans_with_date  
+
+loans_date_factor$LoanDate <- factor(loans_date_factor$LoanDate)
+
+
+
+# Plot average BorrowerRate over time + smoother
+ggplot(aes(x = LoanDate, y = BorrowerRate),
+       data = group_mean) + 
+  geom_point(alpha = 1/5, position = position_jitter(h=0)) +
+  geom_smooth()
+```
+
+One thing that is striking when plotting the average BorrowerRate over time 
+is the gap from the end of 2008 until the beginning of 2009. 
+It seems that during this time no new loans were issued. Subsetting the dataset
+revealed that there a no loans between 2008-10-16 and 2009-04-28. This gap kind
+of coincides with the introduction of the new ProsperRating system, but I doubt
+that a new rating system is a reason to not issue new loans for several months.
+I can only speculate that the collapse of Lehman Brothers in 2008 might have
+played a role in this disruption.
+
+The grand average BorrowerRate (indicated by the blue smoother) increases after the 
+gap in 2009 to reach a peak in 2011. It decreases subsequently.
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+I looked at the numbers of investors funding a loan and found that this in
+influenced by the sum that was loaned but also the rating of the loan and the
+interest rate (= yield for the investor). The number of investor slightly 
+increases as the loaned sum increases. Investor numbers decrease from loans
+with the best to ones with the worst rating. Also interestingly investor numbers
+overall slighty decrease as the interest rate/yield increases.
+
+I also looked at the status of the loans grouped by the rating of the loans. 
+I found that the portion of loans that are in some way overdue or cancelled 
+increase from the best to the worst rating. Also the portion of lower income
+customers increases from the best to the worst rating, while the portion of
+high income customers decreases.
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+
+Plotting the BorrowerRate over time I found an apparent disruption in the 
+business. From October 2008 to April 2009 no new loans seem to have been issued.
+
+I also found that there is a linear relationship between the monthly payment 
+and the original amount of the loan. Interestingly there seem to be distinct 
+groups paying different amounts per month for the same sum loaned.
+
+### What was the strongest relationship you found?
+
+The strongest relationship was probably between the rating of the loan and the
+BorrowerRate/LenderYield. There is apparently a linear increase in median 
+interest rate from the best to the worst rating.
+
+# Multivariate Plots Section
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+# scatterplot colored by term
+
+ggplot(aes(x = LoanOriginalAmount, y = MonthlyLoanPayment, color = 
+             as.factor(Term)), data = loans_date_factor) +
+  geom_point(alpha = 1/10, position = position_jitter(h=0)) +
+  scale_color_manual(values = c("red", "orange", "blue"))
+
+
+```
+
+
+Coloring the scatterplot of LoanOriginalAmount vs MonthlyLoanPayment by Term,
+shows that the 3 groups originate from the 3 different term lengths. One can see
+that, the longer the term of the loan, thelower the monthly loan payment for the
+same total amount loaned. This is of course not surprising, since if you have to
+pay back the same amount of money loaned inless time, you have to pay more each 
+month. 
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# BorrowerRate vs Rating vs time
+
+loan_date_rating <- subset(loans_date_factor, ProsperRating..Alpha. != "")
+
+loan_date_rating$ProsperRating..Alpha._ordered <- 
+  factor(ProsperRatingSub$ProsperRating..Alpha., 
+  levels = c("AA", "A", "B","C","D","E","HR","NC",""))
+
+sd <- loan_date_rating %>%
+  group_by(LoanDate, ProsperRating..Alpha._ordered) %>%
+  summarise(
+    InvMean = mean(Investors),
+    YieldMean = mean(LenderYield),
+    BorMean = mean(BorrowerRate)
+  )
+
+
+ggplot(aes(x = LoanDate, y = BorMean, color = ProsperRating..Alpha._ordered),
+       data = sd) + 
+  geom_point(alpha = 1/5, position = position_jitter(h=0)) 
+
+# Exlude "HR" rating, fix x axis labeling
+
+by(sd$BorMean, sd$ProsperRating..Alpha._ordered, summary)
+
+```
+
+Next I was interested in how the mean interest rate for loans (BorrowerRate)
+changed over time and for the different loan ratings. There were two
+different rating systems in use at different points in time. I decided to only
+look at loans rated using the ProsperRating system, since this covers the 
+majority of loans. The ProsperRating was introduced in 2009, so I will look
+at loans from ca. 2009 until 2014.
+
+Overall one can see that the interest rates are clearly separated by the loan
+rating, meaning that there is a relationship between rating and interes rate. 
+The mean interest rate increases from loans with the best rating (AA) to ones
+with the worst rating (E). The mean interest rate ranges from 0.08 (AA) to
+0.30 (E). The "HR" rating seems to be even worse than "E", as it has the highest
+mean interes rate of 0.31.
+
+Looking at the mean interest rates (which are equivalent to lender yield minus 
+service fees) for each rating, one can notice a slight decrease over time. One 
+could also see this general trend of decreasing interest rates over time when
+plotting all loans (see above). So this general trend seems to affect all loans,
+regardless of their rating. Once again, this trend might be influenced by the
+general interest rate set by the e.g. the Federal Reserve. 
+
+More noticably and interestingly, one can see a decrease in variance of the 
+mean interest rate within each of the different ratings. At the beginning of
+this plot (2009), the mean interest rates are a lot less distinct between the 
+grades than they are at the end (2014). For the most recent loans the mean
+interest rate is very clearly separated depending on the rating and it varies
+only to a narrow degree within each rating. This could indicate that over time
+the influence the loan rating on the interest rate has increased. So that while
+there used to be several variables determining the interest rate of any given
+loan, most recently the loan rating became the dominant factor. Another 
+possibility is, that over time there were some changes in what loans got 
+assigned which rating, so that loans with the same rating are in general more
+similar or uniform to each other.
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+I observed that there are three distinct groups of monthly payment amounts for
+the same overall amount loaned. These three groups seem to be determined by 
+the term of the loan. This seems be logical, since if you loan a certain 
+amount of money, but one customer has to pay back the loan in less time than
+another customer, one has to pay more each month.
+
+Another thing I observed is, that the mean interest is distinct for each of the
+loan ratings. So there seems to be a relationship between rating and interest 
+rate. The mean interest rate for loan with the best rating (AA) is the lowest
+and increases from best to the worst rating (Equivalent to LenderYield by
+ProsperRating shown above). 
+
+
+### Were there any interesting or surprising interactions between features?
+
+Interestingly the variance of the mean interest rate decreased over time for
+each rating. Comparing the interest rates for each rating in 2009 and 2014 shows
+a much clearer distinction between the different ratings. So one could speculate
+that the effect of the rating on the interest rate has increased over time.
+
+# Final Plots and Summary
+
+> **Tip**: You've done a lot of exploration and have built up an understanding
+of the structure of and relationships between the variables in your dataset.
+Here, you will select three plots from all of your previous exploration to
+present here as a summary of some of your most interesting findings. Make sure
+that you have refined your selected plots for good titling, axis labels (with
+units), and good aesthetic choices (e.g. color, transparency). After each plot,
+make sure you justify why you chose each plot by describing what it shows.
+
+### Plot One
+```{r echo=FALSE, warning=FALSE, message=FALSE, Plot_One}
+# Listing category final plot
+
+listingFinal2 <- ggplot(aes(x = ListingCategory..numeric.), data = loans) +
+  geom_bar( color = "black", fill = "white") +
+  scale_x_discrete(limits = seq(0,20,1), breaks = seq(0,20,1), 
+                   labels = seq(0,20,1)) +
+  stat_count(geom="text", colour="black", size=3,
+           aes(label=..count..), position=position_stack(vjust=0.5)) +
+  labs(title="Loans per Category",x="Category", y = "Count") +
+  theme_grey()
+
+
+listingFinal2 <- listingFinal2 + annotate("text", x = 10, y = 50000,
+                label = "0 - Not Available, 1 - Debt Consolidation, 
+                2 - Home Improvement, 3 - Business, 4 - Personal Loan, 
+                5 - Student Use, 6 - Auto, 7 - Other, 8 - Baby&Adoption, 
+                9 - Boat, 10 - Cosmetic Procedure, 11 - Engagement Ring, 
+                12 - Green Loans, 13 - Household Expenses, 14 - Large Purchases,
+                15 - Medical/Dental, 16 - Motorcycle, 17 - RV, 18 - Taxes, 
+                19 - Vacation, 20 - Wedding Loans")
+
+listingFinal2
+```
+
+### Description One
+
+One of the most interesting things for me during the univariate analysis, was
+the histogram of the ListingCategories. This allows for an insight in for what 
+purpose customers took out a loan. To me it was quite surprising to see that
+around half of all the loans in the dataset were taken out in order to 
+consolidate debt. Unfortunately the next most frequent categories were "Not 
+Available" and "Other", which are rather indescriptive regarding purpose. Other
+more frequent categories were "Home Improvement" and "Business".
+
+### Plot Two
+```{r echo=FALSE, warning=FALSE, message=FALSE, Plot_Two}
+# add LoanStatus as fill to the plot
+p1 <- ggplot(aes(x = CreditGrade_ordered, fill=LoanStatus),
+       data = grades_clean) + 
+  geom_bar(stat = "count") +
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal() +
+  labs(title="Loan status per credit grade",x="Credit Grade", y = "Count")
+
+# dodged
+p2 <- ggplot(aes(x = CreditGrade_ordered, fill=LoanStatus),
+       data = grades_clean) + 
+  geom_bar(stat = "count", position = position_dodge()) +
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal() +
+  labs(title="Loan status per credit grade",x="Credit Grade", y = "Count")
+
+# add ratio of completed loans to the plot
+p3 <- ggplot(aes(x = CreditGrade_ordered, fill=LoanStatus == "Completed"),
+       data = grades_clean) + 
+  geom_bar(stat = "count") +
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal() +
+  labs(title="Loan status per credit grade",x="Credit Grade", y = "Count")
+
+# dodged
+p4 <- ggplot(aes(x = CreditGrade_ordered, fill=LoanStatus == "Completed"),
+       data = grades_clean) + 
+  geom_bar(stat = "count",position = position_dodge()) +
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal() +
+  labs(title="Loan status per credit grade",x="Credit Grade", y = "Count")
+
+grid.arrange(p1,p3, ncol = 1)
+
+```
+
+### Description Two
+
+In this analysis I often assumed that the rating of a loan is an indicator for
+the risk the lender has to bear. This plot shows that a worse rating is 
+associated with a higher risk of the loan being either "Defaulted" or 
+"Chargedoff". Put in another way, the ratio of loans that are completed decreses
+from the best to the worst rating. 
+
+### Plot Three
+```{r echo=FALSE, warning=FALSE, message=FALSE, Plot_Three}
+ggplot(aes(x = as.Date(LoanDate), y = BorMean, 
+           color = ProsperRating..Alpha._ordered),
+       data = subset(sd, ProsperRating..Alpha._ordered != "HR")) + 
+  geom_point(alpha = 1/5, position = position_jitter(h=0)) + 
+  theme_minimal() +
+  scale_color_brewer(palette="Accent") +
+  guides(color = guide_legend(override.aes = list(alpha = 1),
+                  title = "Prosper Rating")) +
+  labs(title="Borrower Rate per loan rating over time",x="Year",
+       y = "Borrower Rate") 
+ 
+
+
+```
+
+
+### Description Three
+
+This plot shows the mean interest rate (BorrowerRate) per loan rating over the
+time from 2009 until 2014. For loans with the best rating (AA) customers pay
+the least interest rate, while for loans with the worst rating (E) the interest
+rate is the highest. Overall there is a slight decrease of the mean interest
+rate over time for all the ratings. Interestingly the variance within each 
+rating decreases over time, so that the mean interest rates between the 
+individual ratings are much more distinct in 2014 than in 2009.
+
+
+# Reflection
+
+This dataset contains more than 100 000 observations with 81 variables. I 
+started by looking at some variables that I found interesting and explored
+them. With that many variables, I could not look at every single one and 
+probably missed some interesting ones, and subsequently probably missed some
+interesting relationships between them. 
+
+I found that at some point in time a new rating system for loans was introduced
+(this would have been obvious had I read the variables definition earlier).
+I looked at the income ranges of the customers and found that a significant 
+portion are high income (>75.000\$) customers. Surprisingly to me those high
+income customers took out loans for the purpose of debt consolidation as
+frequently as lower income customers.
+
+The variables I was most interest in were the rating of the loans, the number 
+of investors per loan, the BorrowerRate/LenderYield, the monthly payment and
+income, the loaned amount and the loan status. I found several relationships
+between those variables. The rating of a loan for example relates to the number
+of investors funding a loan, i.e. the number of investors decreases from the
+best to the worst rating. The borrower rate (and lender yield) is also in 
+realtionship with the rating of a loan, as it increases from best to worst
+rating. I also looked at what factors might determine the rating of a loan, and 
+found that the IncomeRange might be a suitable candidate. From the best to the
+worst rating, the proportion of high income customers decreases, while the 
+proportion of lower income customers increases. This hints at the income being
+a determining factor for the rating of a loan. 
+
+I also assumed that the ratingof a loan indicates the risk associated with a 
+loan, meaning that loans with a worse rating are riskier for the lender. By 
+plotting the LoanStatus per rating I showed that the portion of, in one way or 
+another, not completed loans increases from the best to the worst rating. At the
+same time the BorrowerRate and LenderYield also increase from loans with the 
+best to ones with the worst rating. Meaning that as the risk for a lender 
+increases with worse ratings, the possible yield also increases. For customers
+this means that they have to pay higher interest rates for loans with a worse
+rating.
+
+I also found nearly linear relationships between the monthly payment and the
+overall amount loaned, which is not very surprising. There are 3 subsets within
+monthly payment determined by the term of a loan. This means that customers
+have to pay different monthly amounts for the same overall amount they loaned 
+depending on how long the loan runs. This would be a good candidate to develop
+a linear model to predict the monthly payment depending on the overall amount 
+and the term.
+
+I also looked at the BorrowerRate over time and found that there is a gap 
+between October 2008 and April 2009 when no new loans where issued. In this
+case it would be interesting to look at some historical events such as the 
+collapse of Lehman Brothers, which might be a possible explanation. Furthermore
+it would be interesting to plot the Federal Funds Rate (set by the FED) and
+compare it to the interest rate observed in this dataset.
+
+Overall with this dataset I found it difficult to get an overview over which
+of all these variables might be interesting. Some of these variables are also
+quite similar to each other, e.g. there are multiple different income variables,
+two different rating systems and multiple variables for open credit lines and
+so on. Also the introduction of a new rating system in 2009 made it difficult
+to relate variables to the rating over the whole course of time. 
+
+My idea for further analysis of this dataset centers around comparisons with 
+additional datasets. For example one could look at general economic parameters 
+of the U.S.like unemployment, GDP, economic growth rate, wage development, No. 
+of businesses going bankrupt etc. in order to see whether there is a 
+relationship between these more general (national) parameters and the variables 
+in this dataset. One could try find out whether there is a relationship between 
+the overall economic situation and the number of loans taken out. Or is the 
+amount loaned affected by the general development of the wages? Overall it would
+be interesting to put this loan dataset into a broader economic context. 
+
+
+## References
+
+http://ggplot2.tidyverse.org/reference/guide_legend.html
+http://www.sthda.com/english/wiki/ggplot2-histogram-plot-quick-start-guide-r-software-and-data-visualization
+https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/
+https://www.r-bloggers.com/how-to-expand-color-palette-with-ggplot-and-rcolorbrewer/
+http://ggplot2.tidyverse.org/reference/ggtheme.html
